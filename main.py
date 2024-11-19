@@ -1,18 +1,23 @@
 import cv2
+import detect_bg_color
 from modules.image_processing import (
     detect_character_shift,
-    detect_character_shift_with_size,
+    #detect_character_shift_with_size,
     load_image,
     extract_noise,
     detect_edges,
+    detect_bg_color
 )
 from modules.ocr_analysis import extract_text
 from modules.utils import show_image
 
 if __name__ == "__main__":
     # Charger l'image
-    image_path = "data/tickets_modif/647_rajout_0.jpg"
+    image_path = "data/tickets_modif/43_tache_blanche.jpg"
+    detect_bg_color(image_path)
+
     image = load_image(image_path)
+
 
     # # Extraire le bruit
     # noise = extract_noise(image)
