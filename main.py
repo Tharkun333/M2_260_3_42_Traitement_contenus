@@ -37,3 +37,29 @@ if __name__ == "__main__":
 
     folder_path = "data/tickets"
     results = []
+    # Parcourir toutes les images du dossier
+    for i, filename in enumerate(os.listdir(folder_path)):
+        # Construire le chemin complet du fichier
+        file_path = os.path.join(folder_path, filename)
+
+        # Charger l'image
+        image = cv.imread(file_path)
+
+        # Initialiser les raisons
+        raisons = []
+
+        # DETECTION DE MAUVAIS CALCUL
+        is_price_good = price_calculate(image)
+        if not is_price_good:
+            raisons.append("Mauvais calcul")
+
+        # Ajouter le résultat dans la liste
+        results.append({
+            "id": i,
+            "modified": 1 if raisons else 0,
+            "raisons": raisons
+        })
+
+    # Écrire les résultats dans le fichier XML
+    write_results_to_xml(results, output_path="results.xml")
+    print("Résultats écrits dans results.xml")
