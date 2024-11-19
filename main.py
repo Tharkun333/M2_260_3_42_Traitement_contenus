@@ -1,39 +1,66 @@
-import cv2
-from modules.image_processing import (
-    detect_character_shift,
-    detect_character_shift_with_size,
-    load_image,
-    extract_noise,
-    detect_edges,
-)
-from modules.ocr_analysis import extract_text
-from modules.utils import show_image
+import os
+import cv2 as cv
+from modules.image_processing import load_image, price_calculate
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
+
+
+def write_results_to_xml(results, output_path="results.xml"):
+    """
+    Écrit les résultats dans un fichier XML avec des sauts de ligne après chaque balise.
+
+    Args:
+        results (list): Liste des résultats, chaque élément est un dictionnaire avec :
+                        - id : ID du document
+                        - modified : 0 ou 1 (si modifié ou non)
+                        - raisons : Liste des raisons pour modification
+        output_path (str): Chemin du fichier XML de sortie.
+    """
+    # Créer la structure XML
+    root = ET.Element("GT")
+
+    for result in results:
+        doc = ET.SubElement(root, "doc", id=str(result["id"]), modified=str(result["modified"]))
+        raisons = ", ".join(result["raisons"]) if result["raisons"] else ""
+        doc.set("raison", raisons)
+
+    # Convertir en chaîne XML formatée
+    xml_string = ET.tostring(root, encoding="unicode")
+    formatted_xml = minidom.parseString(xml_string).toprettyxml(indent="  ")
+
+    # Écrire dans le fichier avec les sauts de ligne
+    with open(output_path, "w", encoding="utf-8") as xml_file:
+        xml_file.write(formatted_xml)
+
 
 if __name__ == "__main__":
-    # Charger l'image
-    image_path = "data/tickets_modif/647_rajout_0.jpg"
-    image = load_image(image_path)
 
-    # # Extraire le bruit
-    # noise = extract_noise(image)
-    # show_image(noise, "Bruit extrait")
+    folder_path = "data/tickets"
+    results = []
 
-    # # Détecter les contours
-    # edges = detect_edges(image)
-    # show_image(edges, "Contours détectés")
+    # Parcourir toutes les images du dossier
+    for i, filename in enumerate(os.listdir(folder_path)):
+        # Construire le chemin complet du fichier
+        file_path = os.path.join(folder_path, filename)
 
-    # # OCR et extraction de texte
-    # text = extract_text(image_path)
-    # print("Texte extrait :\n", text)
+        # Charger l'image
+        image = cv.imread(file_path)
 
-    # # Détecter les décalages de caractères
-    # shifted_image = detect_character_shift(image, cell_size=(50, 50), threshold=20)
+        # Initialiser les raisons
+        raisons = []
 
-    anomaly_detected_image = detect_character_shift_with_size(
-        image, cell_size=(50, 50), size_threshold=1.5
-    )
+        # DETECTION DE MAUVAIS CALCUL
+        is_price_good = price_calculate(image)
+        if not is_price_good:
+            raisons.append("Mauvais calcul")
 
-    import matplotlib.pyplot as plt
+        # Ajouter le résultat dans la liste
+        results.append({
+            "id": i,
+            "modified": 1 if raisons else 0,
+            "raisons": raisons
+        })
 
-    # Afficher l'image avec les anomalies
-    show_image(anomaly_detected_image, "Décalages de caractères détectés")
+    # Écrire les résultats dans le fichier XML
+    write_results_to_xml(results, output_path="results.xml")
+    print("Résultats écrits dans results.xml")
