@@ -127,6 +127,10 @@ def detect_pixel_anomalies(image, block_size=(10, 10), position_threshold=5):
                         cv2.circle(output_image, center, 3, (0, 0, 255), -1)
 
     return output_image
+    
+###########################################
+# -------- # DETECTION DU PRIX # -------- #
+###########################################
 
 
 # Configuration de Tesseract (modifiez le chemin si nécessaire)
@@ -233,48 +237,38 @@ def price_calculate(img):
     if is_valid or (is_valid==False and levenstein_min < 0.50):
         return True
     return False
-def detect_bg_color(image_path):
+
+################################################
+# -------- # DETECTION DES COULEURS # -------- #
+################################################
+def detect_bg_color(img):
     """
     Identifie les blocs 50x50 avec une couleur dominante différente des couleurs dominantes globales
     en utilisant la somme des différences des couches (R, G, B) et une condition supplémentaire :
     l'une des composantes doit être > 230.
-    Dessine des cercles englobants rouges autour des zones détectées comme erreurs.
+    Renvoie True si aucun bloc n'est détecté comme erreur, sinon False.
 
     Args:
-        image_path (str): Chemin de l'image à analyser.
+        img (np.ndarray): Image à analyser.
 
     Returns:
-        None
+        bool: True si aucune erreur, False sinon.
     """
-    # Chargement de l'image
-    img = cv2.imread(image_path)
-
-    if img is None:
-        print(f"Erreur : L'image '{image_path}' n'a pas été trouvée.")
-        return
-
     # Dimensions des blocs
     block_size = 50
 
-    # Liste pour stocker les blocs détectés comme erreurs
-    error_blocks = []
+    # Dimensions de l'image
+    img_height, img_width = img.shape[:2]
 
     # Liste pour stocker les couleurs dominantes de chaque bloc
     dominant_colors = []
 
-    # Parcourir l'image par macro-blocs pour déterminer la couleur dominante de chaque bloc
-    img_height, img_width = img.shape[:2]
+    # Calcul des couleurs dominantes par macro-bloc
     for y in range(0, img_height, block_size):
         for x in range(0, img_width, block_size):
-            # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
-
-            # Trouver la couleur dominante dans le bloc
-            pixels = block.reshape(-1, 3)  # Convertir les pixels en une liste 2D
-            pixels_list = [tuple(pixel) for pixel in pixels]  # Convertir chaque pixel en tuple
-            dominant_color = Counter(pixels_list).most_common(1)[0][0]  # Couleur la plus fréquente
-
-            # Ajouter la couleur dominante à la liste
+            pixels_list = block.reshape(-1, 3)  # Liste 2D des pixels
+            dominant_color = Counter(map(tuple, pixels_list)).most_common(1)[0][0]
             dominant_colors.append(tuple(map(int, dominant_color)))
 
     # Identifier les deux couleurs les plus dominantes globales
@@ -283,78 +277,37 @@ def detect_bg_color(image_path):
     # Identifier les couleurs dominantes fréquentes (>= 10 blocs)
     frequent_colors = {color for color, count in Counter(dominant_colors).items() if count >= 10 or count <= 2}
 
-    # Parcourir à nouveau pour évaluer la différence avec les deux couleurs dominantes globales
+    # Masque pour les erreurs
+    mask = np.zeros((img_height, img_width), dtype=np.uint8)
+
+    # Parcourir les blocs pour détecter les erreurs
     for y in range(0, img_height, block_size):
         for x in range(0, img_width, block_size):
-            # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
-
-            # Trouver la couleur dominante dans le bloc
-            pixels = block.reshape(-1, 3)
-            pixels_list = [tuple(pixel) for pixel in pixels]
-            dominant_color = Counter(pixels_list).most_common(1)[0][0]
+            pixels_list = block.reshape(-1, 3)
+            dominant_color = Counter(map(tuple, pixels_list)).most_common(1)[0][0]
             dominant_color_bgr = tuple(map(int, dominant_color))
 
-            # Vérifier si la couleur dominante est considérée comme une erreur
-            is_error = True
-
             # Condition 1 : Vérifier la somme des différences avec les couleurs dominantes globales
-            for global_color in global_dominant_colors:
-                if sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) <= 20:
-                    is_error = False
-                    break
+            is_error = all(
+                sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) > 20
+                for global_color in global_dominant_colors
+            )
 
             # Condition 2 : Vérifier si la couleur est fréquente (>= 10 blocs)
             if dominant_color_bgr in frequent_colors:
                 is_error = False
 
             # Condition 3 : Vérifier si l'une des composantes est > 230
-            if is_error and any(component > 230 for component in dominant_color_bgr):
+            if any(component > 230 for component in dominant_color_bgr):
                 is_error = True
-            else:
-                is_error = False
 
-            # Stocker les blocs en erreur
+            # Ajouter au masque si une erreur est détectée
             if is_error:
-                error_blocks.append((x, y, x + block_size, y + block_size))
+                cv2.rectangle(mask, (x, y), (x + block_size, y + block_size), 255, -1)
 
-    # Fusionner les blocs contigus pour générer des contours uniques
-    result_img = img.copy()
-    mask = np.zeros((img_height, img_width), dtype=np.uint8)
-
-    for block in error_blocks:
-        cv2.rectangle(mask, (block[0], block[1]), (block[2], block[3]), 255, -1)
-
-    # Trouver les contours uniques
+    # Trouver les contours uniques dans le masque
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Dessiner des cercles englobants rouges sur l'image
-    for contour in contours:
-        (x, y), radius = cv2.minEnclosingCircle(contour)
-        center = (int(x), int(y))
-        radius = int(radius)
-        cv2.circle(result_img, center, radius, (0, 0, 255), 2)
-
-    # Redimensionner l'image pour qu'elle tienne dans l'écran
-    screen_width = 1920
-    screen_height = 1080
-    scale = min(screen_width / img_width, screen_height / img_height)
-    new_width = int(img_width * scale)
-    new_height = int(img_height * scale)
-    resized_img = cv2.resize(result_img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-
-    # Affichage de l'image redimensionnée
-    cv2.imshow("Macro Blocks with Red Circles", resized_img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-    # Afficher les deux couleurs dominantes globales
-    print("Les deux couleurs dominantes globales sont :")
-    for color in global_dominant_colors:
-        print(f"Couleur (BGR) : {color}")
-
-    # Afficher les couleurs fréquentes
-    print("Couleurs fréquentes (>= 10 blocs) :")
-    for color in frequent_colors:
-        print(f"Couleur (BGR) : {color}")
-
+    # Renvoie False s'il y a des erreurs, sinon True
+    return len(contours) == 0
