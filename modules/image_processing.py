@@ -311,3 +311,113 @@ def detect_bg_color(img):
 
     # Renvoie False s'il y a des erreurs, sinon True
     return len(contours) == 0
+
+
+import cv2
+import os
+from collections import Counter
+
+import cv2
+import os
+from collections import Counter
+import numpy as np
+
+def detect_bg_color_visuel(img, name):
+    """
+    Identifie les blocs 50x50 avec une couleur dominante différente des couleurs dominantes globales
+    et applique un cercle englobant tous les blocs d'anomalies connectés.
+    Enregistre l'image dans le dossier "results" avec le nom spécifié.
+
+    Args:
+        img (numpy.ndarray): Image à analyser (sous forme de matrice numpy).
+        name (str): Nom du fichier de sortie (sans extension).
+
+    Returns:
+        None
+    """
+    # Dimensions des blocs
+    block_size = 50
+
+    # Liste pour stocker les couleurs dominantes de chaque bloc
+    dominant_colors = []
+
+    # Parcourir l'image par macro-blocs pour déterminer la couleur dominante de chaque bloc
+    img_height, img_width = img.shape[:2]
+    for y in range(0, img_height, block_size):
+        for x in range(0, img_width, block_size):
+            # Extraire le macro-bloc
+            block = img[y:y + block_size, x:x + block_size]
+
+            # Trouver la couleur dominante dans le bloc
+            pixels = block.reshape(-1, 3)  # Convertir les pixels en une liste 2D
+            pixels_list = [tuple(pixel) for pixel in pixels]  # Convertir chaque pixel en tuple
+            dominant_color = Counter(pixels_list).most_common(1)[0][0]  # Couleur la plus fréquente
+
+            # Ajouter la couleur dominante à la liste
+            dominant_colors.append(tuple(map(int, dominant_color)))
+
+    # Identifier les deux couleurs les plus dominantes globales
+    global_dominant_colors = [color for color, _ in Counter(dominant_colors).most_common(2)]
+
+    # Identifier les couleurs dominantes fréquentes (>= 10 blocs)
+    frequent_colors = {color for color, count in Counter(dominant_colors).items() if count >= 10}
+
+    # Liste des centres des blocs en erreur
+    error_centers = []
+
+    # Parcourir à nouveau pour évaluer la différence avec les deux couleurs dominantes globales
+    for y in range(0, img_height, block_size):
+        for x in range(0, img_width, block_size):
+            # Extraire le macro-bloc
+            block = img[y:y + block_size, x:x + block_size]
+
+            # Trouver la couleur dominante dans le bloc
+            pixels = block.reshape(-1, 3)
+            pixels_list = [tuple(pixel) for pixel in pixels]
+            dominant_color = Counter(pixels_list).most_common(1)[0][0]
+            dominant_color_bgr = tuple(map(int, dominant_color))
+
+            # Vérifier si la couleur dominante est considérée comme une erreur
+            is_error = True
+
+            # Condition 1 : Vérifier la somme des différences avec les couleurs dominantes globales
+            for global_color in global_dominant_colors:
+                if sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) <= 30:
+                    is_error = False
+                    break
+
+            # Condition 2 : Vérifier si la couleur est fréquente (>= 10 blocs)
+            if dominant_color_bgr in frequent_colors:
+                is_error = False
+
+            # Condition 3 : Vérifier si l'une des composantes est > 230
+            if is_error and any(component > 230 for component in dominant_color_bgr):
+                is_error = True
+            else:
+                is_error = False
+
+            # Stocker le centre des blocs en erreur
+            if is_error:
+                center_x = x + block_size // 2
+                center_y = y + block_size // 2
+                error_centers.append((center_x, center_y))
+
+    # Si des anomalies ont été trouvées, dessiner un cercle englobant
+    if error_centers:
+        # Calculer le cercle englobant
+        points = np.array(error_centers)
+        (x_center, y_center), radius = cv2.minEnclosingCircle(points)
+
+        # Dessiner le cercle sur une copie de l'image
+        result_img = img.copy()
+        center = (int(x_center), int(y_center))
+        radius = int(radius)
+        cv2.circle(result_img, center, radius, (0, 0, 255), 2)
+
+        # Enregistrer l'image
+        os.makedirs("results", exist_ok=True)
+        output_path = os.path.join("results", f"{name}.png")
+        cv2.imwrite(output_path, result_img)
+
+
+
