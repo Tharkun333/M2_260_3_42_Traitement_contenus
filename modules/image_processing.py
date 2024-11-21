@@ -312,20 +312,11 @@ def detect_bg_color(img):
     # Renvoie False s'il y a des erreurs, sinon True
     return len(contours) == 0
 
-
-import cv2
-import os
-from collections import Counter
-
-import cv2
-import os
-from collections import Counter
-import numpy as np
-
 def detect_bg_color_visuel(img, name):
     """
-    Identifie les blocs 50x50 avec une couleur dominante différente des couleurs dominantes globales
-    et applique un cercle englobant tous les blocs d'anomalies connectés.
+    Identifie les blocs 100x100 avec une couleur dominante différente des couleurs dominantes globales
+    et dessine des cercles autour des blocs. Si plusieurs blocs sont proches (un ou deux blocs de distance),
+    un cercle unique les englobe. Sinon, chaque bloc a son propre cercle.
     Enregistre l'image dans le dossier "results" avec le nom spécifié.
 
     Args:
@@ -335,16 +326,32 @@ def detect_bg_color_visuel(img, name):
     Returns:
         None
     """
+    import os
+    import numpy as np
+    import cv2
+    from collections import Counter
+    from scipy.spatial import distance
+    import networkx as nx
+
     # Dimensions des blocs
-    block_size = 50
+    block_size = 100
+    border_margin = 200
 
     # Liste pour stocker les couleurs dominantes de chaque bloc
     dominant_colors = []
 
-    # Parcourir l'image par macro-blocs pour déterminer la couleur dominante de chaque bloc
+    # Dimensions de l'image
     img_height, img_width = img.shape[:2]
-    for y in range(0, img_height, block_size):
-        for x in range(0, img_width, block_size):
+
+    # Ajuster les zones de traitement pour exclure les bordures
+    start_y = border_margin*2
+    end_y = img_height - border_margin
+    start_x = border_margin
+    end_x = img_width - border_margin
+
+    # Parcourir l'image par macro-blocs pour déterminer la couleur dominante de chaque bloc
+    for y in range(start_y, end_y, block_size):
+        for x in range(start_x, end_x, block_size):
             # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
 
@@ -356,18 +363,20 @@ def detect_bg_color_visuel(img, name):
             # Ajouter la couleur dominante à la liste
             dominant_colors.append(tuple(map(int, dominant_color)))
 
-    # Identifier les deux couleurs les plus dominantes globales
-    global_dominant_colors = [color for color, _ in Counter(dominant_colors).most_common(2)]
+    # Identifier les couleurs dominantes fréquentes
+    global_dominant_colors = [color for color, _ in Counter(dominant_colors).most_common(5)]
+    frequent_colors = {color for color, count in Counter(dominant_colors).items() if count <= 2}
 
-    # Identifier les couleurs dominantes fréquentes (>= 10 blocs)
-    frequent_colors = {color for color, count in Counter(dominant_colors).items() if count >= 10}
+    # Copier l'image pour dessiner les cercles
+    result_img = img.copy()
 
     # Liste des centres des blocs en erreur
     error_centers = []
 
-    # Parcourir à nouveau pour évaluer la différence avec les deux couleurs dominantes globales
-    for y in range(0, img_height, block_size):
-        for x in range(0, img_width, block_size):
+    cpterror=0
+    # Parcourir à nouveau pour évaluer la différence avec les couleurs dominantes globales
+    for y in range(start_y, end_y, block_size):
+        for x in range(start_x, end_x, block_size):
             # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
 
@@ -382,42 +391,50 @@ def detect_bg_color_visuel(img, name):
 
             # Condition 1 : Vérifier la somme des différences avec les couleurs dominantes globales
             for global_color in global_dominant_colors:
-                if sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) <= 30:
+                if sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) <= 50:
                     is_error = False
                     break
 
-            # Condition 2 : Vérifier si la couleur est fréquente (>= 10 blocs)
+            # Condition 2 : Vérifier si la couleur est fréquente
             if dominant_color_bgr in frequent_colors:
                 is_error = False
 
-            # Condition 3 : Vérifier si l'une des composantes est > 230
-            if is_error and any(component > 230 for component in dominant_color_bgr):
-                is_error = True
-            else:
-                is_error = False
-
-            # Stocker le centre des blocs en erreur
+            # Stocker les blocs en erreur
             if is_error:
                 center_x = x + block_size // 2
                 center_y = y + block_size // 2
                 error_centers.append((center_x, center_y))
 
-    # Si des anomalies ont été trouvées, dessiner un cercle englobant
+    # Regrouper les blocs connectés
     if error_centers:
-        # Calculer le cercle englobant
-        points = np.array(error_centers)
-        (x_center, y_center), radius = cv2.minEnclosingCircle(points)
+        # Construire un graphe pour connecter les blocs proches
+        graph = nx.Graph()
+        for i, center1 in enumerate(error_centers):
+            for j, center2 in enumerate(error_centers):
+                if i != j and distance.euclidean(center1, center2) <= block_size * 2:
+                    graph.add_edge(i, j)
 
-        # Dessiner le cercle sur une copie de l'image
-        result_img = img.copy()
-        center = (int(x_center), int(y_center))
-        radius = int(radius)
-        cv2.circle(result_img, center, radius, (0, 0, 255), 2)
+        # Identifier les clusters
+        clusters = list(nx.connected_components(graph))
 
+        # Dessiner des cercles pour chaque cluster
+        for cluster in clusters:
+            cluster_points = [error_centers[i] for i in cluster]
+            if len(cluster_points) == 1:
+                # Bloc unique : dessiner un cercle
+                center = cluster_points[0]
+                cv2.circle(result_img, center, block_size // 2, (0, 0, 255), 2)
+            else:
+                # Plusieurs blocs connectés : dessiner un cercle englobant
+                points = np.array(cluster_points)
+                (x_center, y_center), radius = cv2.minEnclosingCircle(points)
+                center = (int(x_center), int(y_center))
+                radius = int(radius)
+                cv2.circle(result_img, center, radius, (0, 0, 255), 2)
+            cpterror+=1
+
+    if(cpterror>0):
         # Enregistrer l'image
         os.makedirs("results", exist_ok=True)
         output_path = os.path.join("results", f"{name}.png")
         cv2.imwrite(output_path, result_img)
-
-
-
