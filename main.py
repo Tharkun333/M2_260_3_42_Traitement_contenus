@@ -1,6 +1,8 @@
 import os
 import cv2 as cv
 from modules.image_processing import load_image, price_calculate, detect_bg_color
+from modules.taille import calculate_boxplot_statistics, detect_fraud_by_boxplot, extract_metadata
+# utiliser la première et mettre les résultats dans la 2eme, la 3eme s'utilise toute seule
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
