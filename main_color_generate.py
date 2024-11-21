@@ -4,19 +4,14 @@ from modules.image_processing import detect_bg_color_visuel
 
 if __name__ == "__main__":
 
-    folder_path = "data/tickets_mimimimi"
+    folder_path = "data/tickets_modif"
     
     # Liste spécifique de fichiers à traiter
-    files_to_process = [
-        "188.jpg",
-        "81.png"
-    ]
-
-    total_files = len(files_to_process)
+    #files_to_process = ["188.jpg","81.png"]
 
     # folder_path = "data/tickets_mimimimi"
-    # files_to_process = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-    # total_files = len(files_to_process)
+    files_to_process = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+    total_files = len(files_to_process)
     
     # Parcourir uniquement les fichiers spécifiés avec une barre de progression
     for i, filename in enumerate(files_to_process):
