@@ -2,3 +2,5 @@ modules/__pycache__/
 .venv/
 __pycache__
 results.xml
+results
+
