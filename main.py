@@ -57,9 +57,9 @@ if __name__ == "__main__":
         raisons = []
 
         # DETECTION DE MAUVAIS CALCUL
-        is_price_good = price_calculate(image)
-        if not is_price_good:
-            raisons.append("Mauvais calcul")
+        # is_price_good = price_calculate(image)
+        # if not is_price_good:
+        #     raisons.append("Mauvais calcul")
 
         # DETECTION DE COULEUR INCORRECTE
         is_color_good = detect_bg_color(image)

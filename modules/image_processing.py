@@ -243,71 +243,82 @@ def price_calculate(img):
 ################################################
 def detect_bg_color(img):
     """
-    Identifie les blocs 50x50 avec une couleur dominante différente des couleurs dominantes globales
-    en utilisant la somme des différences des couches (R, G, B) et une condition supplémentaire :
-    l'une des composantes doit être > 230.
-    Renvoie True si aucun bloc n'est détecté comme erreur, sinon False.
+    Identifie les blocs 100x100 avec une couleur dominante différente des couleurs dominantes globales
+    et dessine des cercles autour des blocs. Si plusieurs blocs sont proches (un ou deux blocs de distance),
+    un cercle unique les englobe. Sinon, chaque bloc a son propre cercle.
+    Enregistre l'image dans le dossier "results" avec le nom spécifié.
 
     Args:
-        img (np.ndarray): Image à analyser.
+        img (numpy.ndarray): Image à analyser (sous forme de matrice numpy).
+        name (str): Nom du fichier de sortie (sans extension).
 
     Returns:
-        bool: True si aucune erreur, False sinon.
+        bool: True si aucune anomalie détectée, False sinon.
     """
-    # Dimensions des blocs
-    block_size = 50
+    from collections import Counter
 
-    # Dimensions de l'image
-    img_height, img_width = img.shape[:2]
+    # Dimensions des blocs
+    block_size = 100
+    border_margin = 200
 
     # Liste pour stocker les couleurs dominantes de chaque bloc
     dominant_colors = []
 
-    # Calcul des couleurs dominantes par macro-bloc
-    for y in range(0, img_height, block_size):
-        for x in range(0, img_width, block_size):
+    # Dimensions de l'image
+    img_height, img_width = img.shape[:2]
+
+    # Ajuster les zones de traitement pour exclure les bordures
+    start_y = border_margin * 2
+    end_y = img_height - border_margin
+    start_x = border_margin
+    end_x = img_width - border_margin
+
+    # Parcourir l'image par macro-blocs pour déterminer la couleur dominante de chaque bloc
+    for y in range(start_y, end_y, block_size):
+        for x in range(start_x, end_x, block_size):
+            # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
-            pixels_list = block.reshape(-1, 3)  # Liste 2D des pixels
-            dominant_color = Counter(map(tuple, pixels_list)).most_common(1)[0][0]
+
+            # Trouver la couleur dominante dans le bloc
+            pixels = block.reshape(-1, 3)  # Convertir les pixels en une liste 2D
+            pixels_list = [tuple(pixel) for pixel in pixels]  # Convertir chaque pixel en tuple
+            dominant_color = Counter(pixels_list).most_common(1)[0][0]  # Couleur la plus fréquente
+
+            # Ajouter la couleur dominante à la liste
             dominant_colors.append(tuple(map(int, dominant_color)))
 
-    # Identifier les deux couleurs les plus dominantes globales
-    global_dominant_colors = [color for color, _ in Counter(dominant_colors).most_common(2)]
+    # Identifier les couleurs dominantes fréquentes
+    global_dominant_colors = [color for color, _ in Counter(dominant_colors).most_common(5)]
+    frequent_colors = {color for color, count in Counter(dominant_colors).items() if count <= 2}
 
-    # Identifier les couleurs dominantes fréquentes (>= 10 blocs)
-    frequent_colors = {color for color, count in Counter(dominant_colors).items() if count >= 10 or count <= 2}
-
-    # Masque pour les erreurs
-    mask = np.zeros((img_height, img_width), dtype=np.uint8)
-
-    # Parcourir les blocs pour détecter les erreurs
-    for y in range(0, img_height, block_size):
-        for x in range(0, img_width, block_size):
+    # Parcourir à nouveau pour évaluer la différence avec les couleurs dominantes globales
+    for y in range(start_y, end_y, block_size):
+        for x in range(start_x, end_x, block_size):
+            # Extraire le macro-bloc
             block = img[y:y + block_size, x:x + block_size]
-            pixels_list = block.reshape(-1, 3)
-            dominant_color = Counter(map(tuple, pixels_list)).most_common(1)[0][0]
+
+            # Trouver la couleur dominante dans le bloc
+            pixels = block.reshape(-1, 3)
+            pixels_list = [tuple(pixel) for pixel in pixels]
+            dominant_color = Counter(pixels_list).most_common(1)[0][0]
             dominant_color_bgr = tuple(map(int, dominant_color))
 
-            # Condition 1 : Vérifier la somme des différences avec les couleurs dominantes globales
-            is_error = all(
-                sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) > 20
-                for global_color in global_dominant_colors
-            )
+            # Vérifier si la couleur dominante est considérée comme une erreur
+            is_error = True
 
-            # Condition 2 : Vérifier si la couleur est fréquente (>= 10 blocs)
+            # Condition 1 : Vérifier la somme des différences avec les couleurs dominantes globales
+            for global_color in global_dominant_colors:
+                if sum(abs(dominant_color_bgr[i] - global_color[i]) for i in range(3)) <= 50:
+                    is_error = False
+                    break
+
+            # Condition 2 : Vérifier si la couleur est fréquente
             if dominant_color_bgr in frequent_colors:
                 is_error = False
 
-            # Condition 3 : Vérifier si l'une des composantes est > 230
-            if any(component > 230 for component in dominant_color_bgr):
-                is_error = True
-
-            # Ajouter au masque si une erreur est détectée
+            # Stocker les blocs en erreur
             if is_error:
-                cv2.rectangle(mask, (x, y), (x + block_size, y + block_size), 255, -1)
+                # Interruption immédiate si une anomalie est détectée
+                return False
 
-    # Trouver les contours uniques dans le masque
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # Renvoie False s'il y a des erreurs, sinon True
-    return len(contours) == 0
+    return True
