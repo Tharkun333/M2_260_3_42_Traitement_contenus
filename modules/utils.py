@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-
+import cv2
 def show_image(image, title="Image"):
     """Affiche une image."""
     plt.imshow(image, cmap='gray')

@@ -43,6 +43,7 @@ if __name__ == "__main__":
     files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
     total_files = len(files)
 
+    
     # Parcourir toutes les images du dossier avec une barre de progression
     for i, filename in enumerate(files):
         # Afficher la barre de progression
