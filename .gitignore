@@ -1,6 +1,4 @@
-module/__pycache__/
+modules/__pycache__/
 .venv/
-.gitignore
-results*
-temp*
-test*
+__pycache__
+results.xml
