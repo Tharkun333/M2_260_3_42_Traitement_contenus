@@ -39,6 +39,12 @@ if __name__ == "__main__":
     folder_path = "data/tickets"
     results = []
 
+    images_origine = "data/tickets"
+    images_modifies = "data/img_modif"
+
+    (sizes, lower_bound_size, upper_bound_size, median_size,lower_bound_width, upper_bound_width,lower_bound_height, upper_bound_height) = calculate_boxplot_statistics(images_origine)
+
+
     # Liste des fichiers dans le dossier
     files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
     total_files = len(files)
@@ -53,12 +59,22 @@ if __name__ == "__main__":
         # Construire le chemin complet du fichier
         file_path = os.path.join(folder_path, filename)
 
+
+
         # Charger l'image
         image = cv.imread(file_path)
 
         # Initialiser les raisons
         raisons = []
 
+        # Détecter si l'image a une taille anormale (dépassant l'écart interquartile)
+        fraude_boxplot = detect_fraud_by_boxplot(file_path, lower_bound_size, upper_bound_size, median_size,lower_bound_width, upper_bound_width,lower_bound_height, upper_bound_height, median_threshold=0.2)
+        if fraude_boxplot:
+            raisons.append("Taille de l'image anormale")
+
+        metadata = extract_metadata(file_path)
+        if metadata:
+            raisons.append("Metadata obtenues, traces de modifications")
         # DETECTION DE MAUVAIS CALCUL
         # is_price_good = price_calculate(image)
         # if not is_price_good:

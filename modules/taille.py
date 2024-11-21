@@ -81,7 +81,7 @@ def extract_metadata(image_path):
             if exif_data:
                 for tag_id, value in exif_data.items():
                     tag = TAGS.get(tag_id, tag_id)
-                    metadata[tag] = value
+                    metadata[value] = tag
     except Exception as e:
         print(f"Erreur lors de l'extraction des métadonnées pour {image_path}: {e}")
     return metadata
@@ -126,10 +126,4 @@ def generate_fraud_detection(base_dir, all_images_dir, output_file, iqr_factor=2
     tree.write(output_file, encoding="utf-8", xml_declaration=True)
     print(f"Fichier de résultat généré avec détection de fraudes : {output_file}")
 
-# Chemins vers les dossiers
-base_dir = "../data/tickets"  # Dossier des images de base (pour le calcul de la taille)
-all_images_dir = "../data/img_Djit_Ouma_Rania/img"  # Dossier de toutes les images à analyser
-output_file = "../détection_fraude_test.xml"
-
-# Générer le fichier XML avec détection de fraudes
-generate_fraud_detection(base_dir, all_images_dir, output_file, iqr_factor=2.0)
+print(extract_metadata("../data/img_modif/1.jpg"))
