@@ -1,2 +1,6 @@
 module/__pycache__/
 .venv/
+.gitignore
+results*
+temp*
+test*
