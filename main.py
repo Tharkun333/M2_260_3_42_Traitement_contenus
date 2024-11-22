@@ -2,6 +2,7 @@ import os
 import cv2 as cv
 from modules.image_processing import load_image, price_calculate, detect_bg_color
 from modules.taille import calculate_boxplot_statistics, detect_fraud_by_boxplot, extract_metadata
+from modules.copy_paste_detect import detect_copy_paste, detect_characters, find_duplicate_characters_with_similar_pixels
 # utiliser la première et mettre les résultats dans la 2eme, la 3eme s'utilise toute seule
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
@@ -36,7 +37,7 @@ def write_results_to_xml(results, output_path="results.xml"):
 
 if __name__ == "__main__":
 
-    folder_path = "data/tickets"
+    folder_path = "data/tickets_mylan"
     results = []
 
     images_origine = "data/tickets"
@@ -84,6 +85,11 @@ if __name__ == "__main__":
         is_color_good = detect_bg_color(image)
         if not is_color_good:
             raisons.append("Tâche ou couleur incorrecte")
+
+        # DETECTION DE COPIER COLLER
+        is_copy_paste = detect_copy_paste(image)
+        if is_copy_paste:
+            raisons.append("Copier-coller détecté")
 
         # Ajouter le résultat dans la liste
         results.append({
